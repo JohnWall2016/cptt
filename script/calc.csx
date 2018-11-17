@@ -10,21 +10,10 @@ class Scanner
 
     public Scanner(string expr) => _expr = expr.ToArray();
 
-    Stack<int> _posSaved = new Stack<int>();
-    
-    public void PushStore()
+    public int Pos
     {
-        _posSaved.Push(_pos);
-    }
-
-    public void PopStore()
-    {
-        _posSaved.Pop();
-    }
-    
-    public void Restore()
-    {
-        _pos = _posSaved.Pop();
+        get => _pos;
+        set => _pos = value;
     }
 
     public bool Forward()
@@ -53,8 +42,21 @@ class Scanner
     public bool IsDiv => IsValid && Current == '/';
 
     public bool IsPeriod => IsValid && Current == '.';
+
+    public bool IsSpace => IsValid && Current == ' ';
+
+    public bool End => _pos >= _expr.Length;
     
     public char Current => _expr[_pos];
+
+    public string Snapshot(int pos)
+    {
+        var str = new string(_expr);
+        if (pos < str.Length)
+            return $"{str.Substring(0, pos)}|{str.Substring(pos, str.Length-pos)}";
+        else
+            return str;
+    }
 
 }
 
@@ -126,14 +128,15 @@ class ExprFactor : Factor
 // factor ➝ num | ( expr )
 Factor ParseFactor(Scanner scan)
 {
-    scan.PushStore();
+    while (scan.IsSpace) scan.Forward();
+    
+    var pos = scan.Pos;
     var num = ParseNum(scan);
     if (num != null)
     {
-        scan.PopStore();
         return new NumFactor(num);
     }
-    scan.Restore();
+    scan.Pos = pos;
 
     if (scan.IsValid && scan.IsLBrace)
     {
@@ -145,7 +148,7 @@ Factor ParseFactor(Scanner scan)
             return new ExprFactor(expr);
         }
     }
-    throw new Exception("Cannot parse factor.");
+    throw new Exception($"Cannot parse factor: {scan.Snapshot(pos)}");
 }
 
 // term ➝ term * factor | term ÷ factor | factor
@@ -211,6 +214,8 @@ Term ParseTerm(Scanner scan)
 
 MulDivFactor ParseMDFactor(Scanner scan)
 {
+    while (scan.IsSpace) scan.Forward();
+    
     if (scan.IsMul || scan.IsDiv)
     {
         var op = scan.IsMul ? MulDivFactor.OP.Mul
@@ -288,6 +293,8 @@ Expr ParseExpr(Scanner scan)
 
 AddSubTerm ParseASTerm(Scanner scan)
 {
+    while (scan.IsSpace) scan.Forward();
+    
     if (scan.IsAdd || scan.IsSub)
     {
         var op = scan.IsAdd ? AddSubTerm.OP.Add
@@ -303,8 +310,19 @@ AddSubTerm ParseASTerm(Scanner scan)
     }
 }
 
-Console.WriteLine(Args[0]);
+try
+{
+    var scan = new Scanner(string.Join("", Args));
+    var node = ParseExpr(scan);
+    if (scan.End)
+        Console.WriteLine(node.Eval());
+    else
+        Console.WriteLine($"Unparsed string: {scan.Snapshot(scan.Pos)}");
+}
+catch(Exception ex)
+{
+    Console.WriteLine(ex.Message);
+}
 
-var scan = new Scanner(Args[0]);
 
-Console.WriteLine(ParseExpr(scan).Eval());
+
